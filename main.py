@@ -1,18 +1,28 @@
 import os
 import threading
+import logging
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-import bot  # Tumhari bot.py file link ho rahi hai
+import bot  # Tumhari bot.py file yahan se connect ho rahi hai
 
-# ================= ENV VARIABLES SETUP =================
+# ================= LOGGING SETUP =================
+# Ye error aur status ko Render par turant print karega
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# ================= ENV VARIABLES =================
 TOKEN = os.getenv("BOT_TOKEN")
 
+# Comma se split karke list banana
 channel_ids_str = os.getenv("CHANNEL_IDS", "")
-CHANNEL_IDS = [int(x.strip()) for x in channel_ids_str.split(",")] if channel_ids_str else []
+CHANNEL_IDS = [int(x.strip()) for x in channel_ids_str.split(",") if x.strip()]
 
 channel_links_str = os.getenv("CHANNEL_LINKS", "")
-CHANNEL_LINKS = [x.strip() for x in channel_links_str.split(",")] if channel_links_str else []
+CHANNEL_LINKS = [x.strip() for x in channel_links_str.split(",") if x.strip()]
 
 app = Flask(__name__)
 
@@ -23,16 +33,20 @@ def home():
 # ================= CHECK JOIN =================
 async def check_join(user_id, context):
     if not CHANNEL_IDS:
+        logger.warning("⚠️ CHANNEL_IDS set nahi hain. Verification skip ho raha hai.")
         return True
 
     for ch in CHANNEL_IDS:
         try:
             member = await context.bot.get_chat_member(ch, user_id)
+            logger.info(f"User {user_id} in Channel {ch} status: {member.status}")
+            
             if member.status not in ["member", "administrator", "creator"]:
                 return False
         except Exception as e:
-            print(f"Error checking channel {ch}: {e}")
+            logger.error(f"❌ Telegram API Error for channel {ch}: {e}")
             return False
+            
     return True
 
 # ================= BUTTONS =================
@@ -41,12 +55,12 @@ def join_buttons():
     buttons.append([InlineKeyboardButton("✅ Check", callback_data="verify")])
     return InlineKeyboardMarkup(buttons)
 
-# ================= START =================
+# ================= HANDLERS =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
+    
     if await check_join(user_id, context):
-        # Agar user joined hai, toh seedha bot.py ka menu dikhao
+        # Verification pass hote hi bot.py ka start chalega
         await bot.start(update, context)
     else:
         await update.message.reply_text(
@@ -54,14 +68,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=join_buttons()
         )
 
-# ================= VERIFY =================
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
-
+    
     if await check_join(user_id, context):
         await query.answer("✅ Verification Successful!", show_alert=True)
-        # Verify hone ke baad seedha VCF bot ka menu khulega
+        # Verify hone par main menu show hoga
         await query.message.reply_text(
             "🤖 **MAIN MENU**\nSelect an option to begin:", 
             reply_markup=bot.main_menu(), 
@@ -70,10 +83,10 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.answer("❌ You must join all channels first!", show_alert=True)
 
-# ================= BOT =================
+# ================= RUN BOT =================
 def run_bot():
     if not TOKEN:
-        print("❌ ERROR: BOT_TOKEN environment variable set nahi hai! Render par set karo.")
+        logger.error("❌ BOT_TOKEN environment variable set nahi hai!")
         return
 
     application = Application.builder().token(TOKEN).build()
@@ -82,21 +95,22 @@ def run_bot():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(verify, pattern="verify"))
     
-    # 2. VCF Bot (bot.py) Handlers
+    # 2. VCF Bot (bot.py) Handlers (Ye ensure karta hai ki bot.py ka har feature chale)
     application.add_handler(CallbackQueryHandler(bot.buttons))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_text))
     application.add_handler(MessageHandler(filters.Document.ALL, bot.handle_file))
 
-    print("🚀 Bot Started Successfully!")
-    application.run_polling()
+    logger.info("🚀 Bot Started Successfully!")
+    
+    # drop_pending_updates=True purane atke hue messages ko ignore karega
+    application.run_polling(drop_pending_updates=True)
 
 # ================= FLASK =================
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
-# ================= MAIN =================
 if __name__ == "__main__":
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
     run_bot()
-                                                  
+            
