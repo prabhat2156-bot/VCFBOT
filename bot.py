@@ -664,12 +664,3 @@ async def process_engine(update, ctx, uid, ud):
         await proc_msg.delete()
         await update.message.reply_text(f"❌ Error occurred: {e}", reply_markup=main_menu())
         clear_ud(uid)
-
-if __name__ == "__main__":
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
-    print("🚀 PREMIUM BOT STARTED: AUTO-SKIP MERGE PROMPT & FILE RENAME FIXED")
-    app.run_polling()
