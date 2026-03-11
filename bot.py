@@ -12,7 +12,7 @@ from telegram.ext import (
 )
 
 # 🔑 Bot Token
-BOT_TOKEN = "8572086597:AAGiQX9jC7q4Kj_lmqSojgVp0lNgDwy_u9Q"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # ================= SETTINGS =================
 
