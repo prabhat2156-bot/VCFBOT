@@ -4,7 +4,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import bot
 
-TOKEN = "YOUR_BOT_TOKEN"
+TOKEN = "8247588556:AAE68EIloqjMtYn_KxbADulvGHZwWqkmA68"
 
 # Private channel IDs
 CHANNEL_IDS = [
