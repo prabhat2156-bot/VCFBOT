@@ -34,7 +34,7 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_join_msg(update: Update):
     btns = [[InlineKeyboardButton(f"Join {ch}", url=f"https://t.me/{ch[1:]}")] for ch in REQUIRED_CHANNELS]
     btns.append([InlineKeyboardButton("Verify ✅", callback_data="verify_subs")])
-    text = "❌ **Access Denied!**\n\nAapne channel leave kar diya hai. Dubara use karne ke liye join karke Verify karein."
+    text = "❌ **Access Denied!**\n\nYou have left the channel. To join again, please join and verify."
     
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(btns))
@@ -49,14 +49,14 @@ async def global_callback_handler(update: Update, context: ContextTypes.DEFAULT_
     if query.data == "verify_subs":
         if await is_subscribed(update, context):
             await query.answer("Verified! ✅")
-            await query.edit_message_text("✅ Verification successful! Ab bot use karne ke liye ek baar /start dabayein.")
+            await query.edit_message_text("✅ Verification successful! Now press /start once to use the bot.")
         else:
-            await query.answer("❌ Pehle dono join karo!", show_alert=True)
+            await query.answer("❌ Please join both Channel!", show_alert=True)
         return
 
     # 2. Baki saare buttons ke liye check
     if not await is_subscribed(update, context):
-        await query.answer("❌ Access Revoked! Pehle join karein.", show_alert=True)
+        await query.answer("❌ Access Revoked! Join first.", show_alert=True)
         return await send_join_msg(update)
 
     # 3. Agar joined hai toh bot.py ke buttons chalenge
