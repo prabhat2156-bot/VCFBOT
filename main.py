@@ -1,175 +1,142 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-import time
-import os
-import bot  # 👈 tumhara main bot file
+import config
+import bot as original_bot
 
-# =============== TERMINAL COLORS ===============
-GREEN = '\033[92m'
-RED = '\033[91m'
-CYAN = '\033[96m'
-YELLOW = '\033[93m'
-RESET = '\033[0m'
-BOLD = '\033[1m'
+bot = telebot.TeleBot(config.BOT_TOKEN)
 
-# =============== BOT CONFIG ===============
+# ================= CHECK JOIN =================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+def is_joined(user_id):
 
-CHANNEL_ID = "@Madarawswork"
-CHANNEL_LINK = "https://t.me/Madarawswork"
-
-CHANNEL2_ID = "@madarachatgroup"
-CHANNEL2_LINK = "https://t.me/madarachatgroup"
-
-OWNER_ID = 8395315423  # 👈 owner telegram id
-
-DIVIDER = "✦ ━━━━━━━━━━━━━━━━━━━━ ✦"
-
-bot = telebot.TeleBot(BOT_TOKEN)
-
-def print_banner():
-    os.system('clear' if os.name == 'posix' else 'cls')
-    print(f"{CYAN}{BOLD}{'='*50}{RESET}")
-    print(f"{GREEN}{BOLD}    💀 CYBER MAINFRAME INITIATED 💀{RESET}")
-    print(f"{RED}{BOLD}    🚨 FORCE JOIN GATEWAY ACTIVE 🚨{RESET}")
-    print(f"{CYAN}{BOLD}{'='*50}{RESET}")
-    print(f"{YELLOW}📡 Target Channels: {CHANNEL_ID} , {CHANNEL2_ID}{RESET}")
-    print(f"{GREEN}✅ Bot is listening for incoming connections...{RESET}\n")
-
-# =============== FORCE JOIN LOGIC ===============
-def is_user_subscribed(user_id):
     try:
-        ch1 = bot.get_chat_member(CHANNEL_ID, user_id).status
-        ch2 = bot.get_chat_member(CHANNEL2_ID, user_id).status
+
+        ch1 = bot.get_chat_member(config.CHANNEL_1, user_id).status
+        ch2 = bot.get_chat_member(config.CHANNEL_2, user_id).status
 
         if ch1 in ['left','kicked'] or ch2 in ['left','kicked']:
             return False
+
         return True
 
-    except Exception as e:
-        print(f"{RED}[ERROR] API Check Failed: {e}{RESET}")
+    except:
         return False
 
 
-def force_join_markup():
-    markup = InlineKeyboardMarkup(row_width=1)
+# ================= BUTTONS =================
 
-    markup.add(InlineKeyboardButton("💀 JOIN CHANNEL 1", url=CHANNEL_LINK))
-    markup.add(InlineKeyboardButton("💀 JOIN CHANNEL 2", url=CHANNEL2_LINK))
-    markup.add(InlineKeyboardButton("⚡ VERIFY CONNECTION", callback_data="verify_access"))
+def join_buttons():
+
+    markup = InlineKeyboardMarkup()
+
+    btn1 = InlineKeyboardButton(
+        "📢 JOIN CHANNEL 1",
+        url=config.CHANNEL_1_LINK
+    )
+
+    btn2 = InlineKeyboardButton(
+        "📢 JOIN CHANNEL 2",
+        url=config.CHANNEL_2_LINK
+    )
+
+    verify = InlineKeyboardButton(
+        "✅ VERIFY",
+        callback_data="verify"
+    )
+
+    markup.add(btn1)
+    markup.add(btn2)
+    markup.add(verify)
 
     return markup
 
 
-# =============== MESSAGE HANDLERS ===============
+# ================= START =================
+
 @bot.message_handler(commands=['start'])
-def start_command(message):
+def start(message):
 
     user_id = message.from_user.id
-    first_name = message.from_user.first_name
 
-    print(f"{CYAN}[LOG] Connection attempt by ID: {user_id}{RESET}")
+    if not is_joined(user_id):
 
-    if not is_user_subscribed(user_id):
-
-        text = f"""
-🚨 *SYSTEM BREACH DETECTED* 🚨
-{DIVIDER}
-❌ *ACCESS DENIED!* 
-
-🛡️ Join both encrypted networks to bypass firewall.
-{DIVIDER}
-"""
-
-        bot.send_message(user_id, text, parse_mode="Markdown", reply_markup=force_join_markup())
-        print(f"{RED}[BLOCKED] Access Denied for ID: {user_id}{RESET}")
-
-    else:
-
-        text = f"""
-✅ *ACCESS GRANTED* ✅
-{DIVIDER}
-Welcome to the Mainframe, `{first_name}`.
-
-📡 Status: Connected
-🛡️ Security: Encrypted
-⚡ Privilege: Admin Level 1
-
-`Waiting for command execution...`
-{DIVIDER}
-"""
-
-        bot.send_message(user_id, text, parse_mode="Markdown")
-
-        # 👇 OWNER NOTIFICATION
         bot.send_message(
-            OWNER_ID,
-            f"🔔 New User Got Access\n\n👤 Name: {first_name}\n🆔 ID: {user_id}"
+            user_id,
+            "⚠️ please join channel.",
+            reply_markup=join_buttons()
         )
 
-        print(f"{GREEN}[GRANTED] Access Approved for ID: {user_id}{RESET}")
-
-
-@bot.message_handler(func=lambda message: True)
-def handle_all_messages(message):
-
-    user_id = message.from_user.id
-
-    if not is_user_subscribed(user_id):
-
-        bot.reply_to(message, "⚠️ ERROR: Send /start and join channels first")
-        bot.delete_message(message.chat.id, message.message_id)
-
     else:
-        bot.reply_to(message, f"💻 Command Received: {message.text}")
+
+        bot.send_message(
+            user_id,
+            "✅ Access Granted"
+        )
+
+        bot.send_message(
+            config.OWNER_ID,
+            f"🔔 New User Access\n\n{message.from_user.first_name}\n{user_id}"
+        )
+
+        original_bot.start(message)
 
 
-# =============== CALLBACK HANDLER ===============
-@bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
+# ================= VERIFY =================
+
+@bot.callback_query_handler(func=lambda call: call.data=="verify")
+def verify(call):
 
     user_id = call.from_user.id
 
-    if call.data == "verify_access":
+    if not is_joined(user_id):
 
-        if not is_user_subscribed(user_id):
+        bot.answer_callback_query(
+            call.id,
+            "❌ Join both channels first",
+            show_alert=True
+        )
 
-            bot.answer_callback_query(
-                call.id,
-                "❌ Join both channels first!",
-                show_alert=True
-            )
+    else:
 
-        else:
+        bot.delete_message(
+            call.message.chat.id,
+            call.message.message_id
+        )
 
-            bot.delete_message(call.message.chat.id, call.message.message_id)
+        bot.send_message(
+            user_id,
+            "✅ Verified\n\nBot ready."
+        )
 
-            text = f"""
-✅ *FIREWALL BYPASSED* ✅
-{DIVIDER}
-Welcome `{call.from_user.first_name}`
+        bot.send_message(
+            config.OWNER_ID,
+            f"🔔 User Verified\n\n{call.from_user.first_name}\n{user_id}"
+        )
 
-Access Granted.
-{DIVIDER}
-"""
-
-            bot.send_message(user_id, text, parse_mode="Markdown")
-
-            # 👇 OWNER MESSAGE
-            bot.send_message(
-                OWNER_ID,
-                f"🔔 User Verified\n\n👤 {call.from_user.first_name}\n🆔 {user_id}"
-            )
+        original_bot.start(call.message)
 
 
-# =============== START BOT ===============
-if __name__ == "__main__":
+# ================= OTHER MESSAGES =================
 
-    print_banner()
+@bot.message_handler(func=lambda message: True)
+def all_messages(message):
 
-    try:
-        bot.infinity_polling(timeout=60, long_polling_timeout=60)
+    user_id = message.from_user.id
 
-    except Exception as e:
-        print(f"{RED}CRITICAL ERROR: {e}{RESET}")
+    if not is_joined(user_id):
+
+        bot.send_message(
+            user_id,
+            "⚠️ Send /start and join channels first"
+        )
+
+    else:
+
+        original_bot.handle(message)
+
+
+# ================= START BOT =================
+
+print("Force Join Gateway Running...")
+
+bot.infinity_polling()
