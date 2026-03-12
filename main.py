@@ -6,17 +6,13 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler, 
     MessageHandler, filters, ContextTypes
 )
+import bot # Aapka original bot.py
 
-# --- 1. IMPORT YOUR ORIGINAL BOT LOGIC ---
-# Maan lete hain tumhare bot.py mein ye saare functions hain
-import bot 
-
-# --- 2. CONFIGURATION ---
+# --- CONFIG ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-# Apne 2 channels ke username yahan dalo
-REQUIRED_CHANNELS = ["@Madarawswork", "@madarachatgroup"] 
+REQUIRED_CHANNELS = ["@Madarawswork", "@madarachatgroup"] # Apne channel usernames yahan dalo
 
-# --- 3. RENDER SERVER (24/7) ---
+# --- RENDER SERVER ---
 server = Flask(__name__)
 @server.route('/')
 def home(): return "Bot is Online"
@@ -25,7 +21,7 @@ def run_server():
     port = int(os.environ.get("PORT", 8080))
     server.run(host='0.0.0.0', port=port)
 
-# --- 4. FORCE JOIN CHECK ---
+# --- STRICT JOIN CHECK ---
 async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     for channel in REQUIRED_CHANNELS:
@@ -35,47 +31,67 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: return False
     return True
 
-# --- 5. SMART START HANDLER ---
-async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Check if user has joined
-    if not await is_subscribed(update, context):
-        btns = [[InlineKeyboardButton(f"Join {ch}", url=f"https://t.me/{ch[1:]}")] for ch in REQUIRED_CHANNELS]
-        btns.append([InlineKeyboardButton("Verify & Start ✅", callback_data="verify_subs")])
-        return await update.message.reply_text(
-            "❌ **Access Denied!**\n\nBot use karne ke liye pehle dono channels join karein.",
-            reply_markup=InlineKeyboardMarkup(btns)
-        )
+async def send_join_msg(update: Update):
+    btns = [[InlineKeyboardButton(f"Join {ch}", url=f"https://t.me/{ch[1:]}")] for ch in REQUIRED_CHANNELS]
+    btns.append([InlineKeyboardButton("Verify ✅", callback_data="verify_subs")])
+    text = "❌ **Access Denied!**\n\nAapne channel leave kar diya hai. Dubara use karne ke liye join karke Verify karein."
     
-    # AGAR JOINED HAI -> Seedha tumhare bot.py wala start function
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(btns))
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(btns))
+
+# --- MIDDLEWARE FOR ALL CALLBACKS (Buttons Fix) ---
+async def global_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    
+    # 1. Agar Verify button hai toh uska logic alag chalega
+    if query.data == "verify_subs":
+        if await is_subscribed(update, context):
+            await query.answer("Verified! ✅")
+            await query.edit_message_text("✅ Verification successful! Ab bot use karne ke liye ek baar /start dabayein.")
+        else:
+            await query.answer("❌ Pehle dono join karo!", show_alert=True)
+        return
+
+    # 2. Baki saare buttons ke liye check
+    if not await is_subscribed(update, context):
+        await query.answer("❌ Access Revoked! Pehle join karein.", show_alert=True)
+        return await send_join_msg(update)
+
+    # 3. Agar joined hai toh bot.py ke buttons chalenge
+    await bot.buttons(update, context)
+
+# --- MIDDLEWARE FOR MESSAGES & FILES ---
+async def global_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_subscribed(update, context):
+        return await send_join_msg(update)
+    
+    # Joined hai toh bot.py ke functions
+    if update.message.document:
+        await bot.handle_file(update, context)
+    else:
+        await bot.handle_text(update, context)
+
+async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_subscribed(update, context):
+        return await send_join_msg(update)
     await bot.start(update, context)
 
-async def verify_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if await is_subscribed(update, context):
-        await query.answer("Verified! ✅")
-        await query.delete_message()
-        # Seedha tumhare bot.py wala start function call hoga
-        await bot.start(update, context)
-    else:
-        await query.answer("❌ Pehle dono join karo!", show_alert=True)
-
-# --- 6. RUNNING THE APPLICATION ---
+# --- RUN ---
 if __name__ == "__main__":
-    # Start Flask in background
     Thread(target=run_server).start()
-    
-    # Initialize Bot using your token
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     
-    # Custom Force Join Handlers
+    # Start Command
     app.add_handler(CommandHandler("start", start_handler))
-    app.add_handler(CallbackQueryHandler(verify_callback, pattern="verify_subs"))
     
-    # Register all other handlers from your original bot.py
-    app.add_handler(CallbackQueryHandler(bot.buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_text))
-    app.add_handler(MessageHandler(filters.Document.ALL, bot.handle_file))
+    # All Button Clicks (Fixed Inline Button Issue)
+    app.add_handler(CallbackQueryHandler(global_callback_handler))
     
-    print("Bot is running with Force Join & Render Support...")
+    # All Files and Texts
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, global_message_handler))
+    
+    print("Bot is 100% Fixed and Running...")
     app.run_polling()
-        
+                           
