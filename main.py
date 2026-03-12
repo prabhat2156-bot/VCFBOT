@@ -18,11 +18,7 @@ from telegram.ext import (
 load_dotenv()
 
 # =============== IMPORT BOT.PY FEATURES ===============
-from bot import (
-    show_welcome_message, show_features_menu, handle_command,
-    main_menu, get_ud, clear_ud, DEFAULT_SETTINGS
-)
-
+import bot
 # =============== BOT CONFIGURATION ===============
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHANNEL_1_ID = os.getenv('CHANNEL_1_ID')
