@@ -6,7 +6,9 @@ import bot as original_bot
 
 bot = telebot.TeleBot(config.BOT_TOKEN)
 
-# ================= CHECK JOIN =================
+# bot instance bot.py ko dena
+original_bot.bot = bot
+
 
 def is_joined(user_id):
 
@@ -24,26 +26,13 @@ def is_joined(user_id):
         return False
 
 
-# ================= BUTTONS =================
-
 def join_buttons():
 
     markup = InlineKeyboardMarkup()
 
-    btn1 = InlineKeyboardButton(
-        "📢 JOIN CHANNEL 1",
-        url=config.CHANNEL_1_LINK
-    )
-
-    btn2 = InlineKeyboardButton(
-        "📢 JOIN CHANNEL 2",
-        url=config.CHANNEL_2_LINK
-    )
-
-    verify = InlineKeyboardButton(
-        "✅ VERIFY",
-        callback_data="verify"
-    )
+    btn1 = InlineKeyboardButton("📢 JOIN CHANNEL 1", url=config.CHANNEL_1_LINK)
+    btn2 = InlineKeyboardButton("📢 JOIN CHANNEL 2", url=config.CHANNEL_2_LINK)
+    verify = InlineKeyboardButton("✅ VERIFY", callback_data="verify")
 
     markup.add(btn1)
     markup.add(btn2)
@@ -51,8 +40,6 @@ def join_buttons():
 
     return markup
 
-
-# ================= START =================
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -63,26 +50,22 @@ def start(message):
 
         bot.send_message(
             user_id,
-            "⚠️ please join channel.",
+            "⚠️ Bot use karne ke liye dono channels join karo",
             reply_markup=join_buttons()
         )
 
     else:
 
-        bot.send_message(
-            user_id,
-            "✅ Access Granted"
-        )
+        bot.send_message(user_id, "✅ Access Granted")
 
         bot.send_message(
             config.OWNER_ID,
             f"🔔 New User Access\n\n{message.from_user.first_name}\n{user_id}"
         )
 
+        # original bot start
         original_bot.start(message)
 
-
-# ================= VERIFY =================
 
 @bot.callback_query_handler(func=lambda call: call.data=="verify")
 def verify(call):
@@ -104,10 +87,7 @@ def verify(call):
             call.message.message_id
         )
 
-        bot.send_message(
-            user_id,
-            "✅ Verified\n\nBot ready."
-        )
+        bot.send_message(user_id, "✅ Verified")
 
         bot.send_message(
             config.OWNER_ID,
@@ -117,8 +97,6 @@ def verify(call):
         original_bot.start(call.message)
 
 
-# ================= OTHER MESSAGES =================
-
 @bot.message_handler(func=lambda message: True)
 def all_messages(message):
 
@@ -126,17 +104,13 @@ def all_messages(message):
 
     if not is_joined(user_id):
 
-        bot.send_message(
-            user_id,
-            "⚠️ Send /start and join channels first"
-        )
+        bot.send_message(user_id, "⚠️ Send /start and join channels")
 
     else:
 
+        # message original bot ko
         original_bot.handle(message)
 
-
-# ================= START BOT =================
 
 print("Force Join Gateway Running...")
 
