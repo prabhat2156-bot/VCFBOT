@@ -4,3 +4,4 @@ phonenumbers
 openpyxl
 flask
 pyTelegramBotAPI
+python-dotenv
