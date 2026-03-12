@@ -14,7 +14,7 @@ import bot
 # --- 2. CONFIGURATION ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 # Apne 2 channels ke username yahan dalo
-REQUIRED_CHANNELS = ["@Channel1", "@Channel2"] 
+REQUIRED_CHANNELS = ["@Madarawswork", "@madarachatgroup"] 
 
 # --- 3. RENDER SERVER (24/7) ---
 server = Flask(__name__)
