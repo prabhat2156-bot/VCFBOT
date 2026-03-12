@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+# ==================================================
+#    💀 CYBER MAINFRAME - VERIFICATION BOT WITH IMPORT 💀
+#    ⚡ FORCE JOIN SYSTEM + BOT.PY FEATURES 💀
+#    🛡️ BY: Phantom tech
+# ==================================================
+
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import os
@@ -6,6 +13,9 @@ from dotenv import load_dotenv
 
 # =============== LOAD ENVIRONMENT VARIABLES ===============
 load_dotenv()
+
+# =============== IMPORT BOT.PY FEATURES ===============
+from bot import show_welcome_message, show_features_menu, handle_command
 
 # =============== TERMINAL COLORS ===============
 GREEN = '\033[92m'
@@ -16,15 +26,13 @@ RESET = '\033[0m'
 BOLD = '\033[1m'
 
 # =============== BOT CONFIGURATION ===============
-# 👈 Environment Variables se load honge
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 CHANNEL_1_ID = os.getenv('CHANNEL_1_ID')
 CHANNEL_1_LINK = os.getenv('CHANNEL_1_LINK')
 CHANNEL_2_ID = os.getenv('CHANNEL_2_ID')
 CHANNEL_2_LINK = os.getenv('CHANNEL_2_LINK')
 GROUP_ID = os.getenv('GROUP_ID')
-PRIVATE_LOGS_ID = os.getenv('PRIVATE_LOGS_ID')  # New: Private group for logs
-MAIN_BOT_USERNAME = os.getenv('MAIN_BOT_USERNAME')
+PRIVATE_LOGS_ID = os.getenv('PRIVATE_LOGS_ID')
 
 DIVIDER = "✦ ━━━━━━━━━━━━━━━━━━━━ ✦"
 
@@ -32,7 +40,6 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 # =============== DATABASE FOR VERIFIED USERS ===============
 verified_users = set()
-user_history = {}  # Store user join history
 
 def is_user_verified(user_id):
     """Check if user is already verified"""
@@ -87,7 +94,7 @@ def print_banner():
 
 # =============== FORCE JOIN LOGIC ===============
 def is_user_subscribed_both(user_id):
-    """Check if user is in BOTH channels"""
+    """Check if user is in BOTH channels - REAL-TIME CHECK"""
     try:
         # Check Channel 1
         status1 = bot.get_chat_member(CHANNEL_1_ID, user_id).status
@@ -112,12 +119,6 @@ def force_join_markup():
     markup.add(InlineKeyboardButton("⚡ VERIFY CONNECTION", callback_data="verify_access"))
     return markup
 
-def verify_markup():
-    """Generate Verify Button"""
-    markup = InlineKeyboardMarkup(row_width=1)
-    markup.add(InlineKeyboardButton("⚡ VERIFY NOW", callback_data="verify_access"))
-    return markup
-
 # =============== MESSAGE HANDLERS ===============
 @bot.message_handler(commands=['start'])
 def start_command(message):
@@ -127,70 +128,49 @@ def start_command(message):
     print(f"{CYAN}[LOG] Connection attempt by ID: {user_id}{RESET}")
     log_user_activity(user_id, "START_COMMAND", f"User started bot")
 
-    # Check if already verified
-    if is_user_verified(user_id):
-        bot.send_message(user_id, f"""
-✅ *VERIFIED USER* ✅
-{DIVIDER}
-Welcome back, `{first_name}`.
-
-📡 *Status:* Verified
-🛡️ *Security:* Active
-⚡ *Privilege:* Full Access
-
-`You can now use the main bot features.`
-{DIVIDER}
-""", parse_mode="Markdown")
-        return
-
-    # Check channel subscription
+    # REAL-TIME CHECK - Check channels EVERY TIME
     if not is_user_subscribed_both(user_id):
         # ❌ ACCESS DENIED MESSAGE
         text = f"""
 🚨 *SYSTEM BREACH DETECTED* 🚨
 {DIVIDER}
-❌ *ACCESS DENIED!* `Unidentified user attempting to access the mainframe. Protocol 404 engaged.`
+❌ *ACCESS DENIED!* `You have left the encrypted network.`
 
-🛡️ You must join BOTH encrypted networks to bypass this firewall.
+🛡️ You must join BOTH channels to use this bot.
 {DIVIDER}
 """
         bot.send_message(user_id, text, parse_mode="Markdown", reply_markup=force_join_markup())
+        remove_verified_user(user_id)
         print(f"{RED}[BLOCKED] Access Denied for ID: {user_id}{RESET}")
-    else:
-        # ✅ ACCESS GRANTED - Forward to main bot
-        text = f"""
-✅ *ACCESS GRANTED* ✅
-{DIVIDER}
-Welcome to the Mainframe, `{first_name}`.
+        return
 
-📡 *Status:* Connected
-🛡️ *Security:* Encrypted
-⚡ *Privilege:* Admin Level 1
-
-`Waiting for command execution...`
-{DIVIDER}
-"""
-        bot.send_message(user_id, text, parse_mode="Markdown")
-        add_verified_user(user_id)
-        
-        # Forward to group where main bot is
-        try:
-            bot.forward_message(GROUP_ID, message.chat.id, message.message_id)
-            print(f"{GREEN}[FORWARD] User {user_id} forwarded to group{RESET}")
-        except Exception as e:
-            print(f"{RED}[ERROR] Forward Failed: {e}{RESET}")
-        
-        print(f"{GREEN}[GRANTED] Access Approved for ID: {user_id}{RESET}")
+    # ✅ ACCESS GRANTED - Show bot.py Welcome Message + Features
+    add_verified_user(user_id)
+    
+    # Show Welcome Message from bot.py
+    welcome_text = show_welcome_message(user_id, first_name)
+    bot.send_message(user_id, welcome_text, parse_mode="Markdown")
+    
+    # Show Features Menu from bot.py
+    features_menu = show_features_menu()
+    bot.send_message(user_id, "🎯 *Available Features:*", reply_markup=features_menu)
+    
+    print(f"{GREEN}[GRANTED] Access Approved for ID: {user_id}{RESET}")
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
-    """Intercept all other messages if not joined"""
+    """Intercept all other messages - REAL-TIME CHECK"""
     user_id = message.from_user.id
     
+    # REAL-TIME CHECK on EVERY message
     if not is_user_subscribed_both(user_id):
         bot.reply_to(message, "⚠️ *ERROR:* You cannot send messages until you bypass the firewall. Send /start", parse_mode="Markdown")
+        remove_verified_user(user_id)
+        log_user_activity(user_id, "MESSAGE_BLOCKED", "User left channels")
     else:
-        bot.reply_to(message, f"💻 *Command Received:* `{message.text}`\n_Executing..._", parse_mode="Markdown")
+        # Call bot.py command handler
+        response = handle_command(message.text)
+        bot.reply_to(message, response, parse_mode="Markdown")
 
 # =============== CALLBACK HANDLER ===============
 @bot.callback_query_handler(func=lambda call: True)
@@ -198,33 +178,22 @@ def callback_handler(call):
     user_id = call.from_user.id
     
     if call.data == "verify_access":
+        # REAL-TIME CHECK
         if not is_user_subscribed_both(user_id):
             bot.answer_callback_query(call.id, "❌ FIREWALL ACTIVE: You have not joined the network yet!", show_alert=True)
         else:
             bot.answer_callback_query(call.id, "✅ Verified! Access Granted", show_alert=True)
             bot.delete_message(call.message.chat.id, call.message.message_id)
             
-            text = f"""
-✅ *FIREWALL BYPASSED* ✅
-{DIVIDER}
-Welcome to the Mainframe, `{call.from_user.first_name}`.
-
-📡 *Status:* Connected
-🛡️ *Security:* Encrypted
-⚡ *Privilege:* Admin Level 1
-
-`Waiting for command execution...`
-{DIVIDER}
-"""
-            bot.send_message(user_id, text, parse_mode="Markdown")
             add_verified_user(user_id)
             
-            # Forward to group
-            try:
-                bot.forward_message(GROUP_ID, call.message.chat.id, call.message.message_id)
-                print(f"{GREEN}[FORWARD] User {user_id} forwarded to group{RESET}")
-            except Exception as e:
-                print(f"{RED}[ERROR] Forward Failed: {e}{RESET}")
+            # Show Welcome Message from bot.py
+            welcome_text = show_welcome_message(user_id, call.from_user.first_name)
+            bot.send_message(user_id, welcome_text, parse_mode="Markdown")
+            
+            # Show Features Menu from bot.py
+            features_menu = show_features_menu()
+            bot.send_message(user_id, "🎯 *Available Features:*", reply_markup=features_menu)
 
 # =============== GROUP MESSAGE HANDLER ===============
 @bot.message_handler(func=lambda message: message.chat.id == GROUP_ID)
@@ -270,7 +239,6 @@ def check_command(message):
 # =============== ADMIN COMMAND ===============
 @bot.message_handler(commands=['admin'])
 def admin_command(message):
-    # Check if user is admin (you can add admin list)
     if message.from_user.id == 123456789:  # Apna user ID yahan daalo
         bot.send_message(message.from_user.id, f"""
 🛡️ *ADMIN PANEL* 🛡️
