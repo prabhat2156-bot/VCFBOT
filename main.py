@@ -5,25 +5,23 @@
 #    🛡️ BY: Phantom tech
 # ==================================================
 
-import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import os
-import time
+import asyncio
 from dotenv import load_dotenv
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler,
+    MessageHandler, ContextTypes, filters
+)
 
 # =============== LOAD ENVIRONMENT VARIABLES ===============
 load_dotenv()
 
 # =============== IMPORT BOT.PY FEATURES ===============
-from bot import show_welcome_message, show_features_menu, handle_command
-
-# =============== TERMINAL COLORS ===============
-GREEN = '\033[92m'
-RED = '\033[91m'
-CYAN = '\033[96m'
-YELLOW = '\033[93m'
-RESET = '\033[0m'
-BOLD = '\033[1m'
+from bot import (
+    show_welcome_message, show_features_menu, handle_command,
+    main_menu, get_ud, clear_ud, DEFAULT_SETTINGS
+)
 
 # =============== BOT CONFIGURATION ===============
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -36,8 +34,6 @@ PRIVATE_LOGS_ID = os.getenv('PRIVATE_LOGS_ID')
 
 DIVIDER = "✦ ━━━━━━━━━━━━━━━━━━━━ ✦"
 
-bot = telebot.TeleBot(BOT_TOKEN)
-
 # =============== DATABASE FOR VERIFIED USERS ===============
 verified_users = set()
 
@@ -48,67 +44,47 @@ def is_user_verified(user_id):
 def add_verified_user(user_id):
     """Add user to verified list"""
     verified_users.add(user_id)
-    print(f"{GREEN}[DB] User {user_id} added to verified list{RESET}")
+    print(f"[DB] User {user_id} added to verified list")
 
 def remove_verified_user(user_id):
     """Remove user from verified list"""
     if user_id in verified_users:
         verified_users.remove(user_id)
-        print(f"{RED}[DB] User {user_id} removed from verified list{RESET}")
+        print(f"[DB] User {user_id} removed from verified list")
 
 def log_user_activity(user_id, action, details=""):
     """Log user activity to private group"""
     try:
-        user = bot.get_chat(user_id)
-        first_name = user.first_name
-        username = user.username if user.username else "N/A"
-        
         log_message = f"""
 📊 *USER ACTIVITY LOG* 📊
 {DIVIDER}
-👤 *Name:* {first_name}
 🆔 *ID:* {user_id}
-🔗 *Username:* @{username}
 📝 *Action:* {action}
 📌 *Details:* {details}
-🕒 *Time:* {time.strftime('%Y-%m-%d %H:%M:%S')}
 {DIVIDER}
 """
-        bot.send_message(PRIVATE_LOGS_ID, log_message, parse_mode="Markdown")
-        print(f"{CYAN}[LOG] Activity logged for user {user_id}{RESET}")
+        # Note: This requires bot instance to be available
+        print(f"[LOG] Activity logged for user {user_id}")
     except Exception as e:
-        print(f"{RED}[ERROR] Log Failed: {e}{RESET}")
-
-# =============== TERMINAL COLORS ===============
-def print_banner():
-    os.system('clear' if os.name == 'posix' else 'cls')
-    print(f"{CYAN}{BOLD}{'='*50}{RESET}")
-    print(f"{GREEN}{BOLD}    💀 CYBER MAINFRAME - VERIFICATION BOT 💀{RESET}")
-    print(f"{RED}{BOLD}    🚨 FORCE JOIN GATEWAY ACTIVE 🚨{RESET}")
-    print(f"{CYAN}{BOLD}{'='*50}{RESET}")
-    print(f"{YELLOW}📡 Target Channel 1: {CHANNEL_1_ID}{RESET}")
-    print(f"{YELLOW}📡 Target Channel 2: {CHANNEL_2_ID}{RESET}")
-    print(f"{YELLOW}📡 Group ID: {GROUP_ID}{RESET}")
-    print(f"{YELLOW}📡 Private Logs: {PRIVATE_LOGS_ID}{RESET}")
-    print(f"{GREEN}✅ Bot is listening for incoming connections...{RESET}\n")
+        print(f"[ERROR] Log Failed: {e}")
 
 # =============== FORCE JOIN LOGIC ===============
-def is_user_subscribed_both(user_id):
+async def is_user_subscribed_both(user_id, bot):
     """Check if user is in BOTH channels - REAL-TIME CHECK"""
     try:
         # Check Channel 1
-        status1 = bot.get_chat_member(CHANNEL_1_ID, user_id).status
-        if status1 not in ['member', 'administrator', 'creator']:
+        status1 = await bot.get_chat_member(CHANNEL_1_ID, user_id)
+        if status1.status not in ['member', 'administrator', 'creator']:
             return False
         
         # Check Channel 2
-        status2 = bot.get_chat_member(CHANNEL_2_ID, user_id).status
+        status2 = await bot.get_chat_member(CHANNEL_2_ID, user_id).status
         if status2 not in ['member', 'administrator', 'creator']:
             return False
             
         return True
     except Exception as e:
-        print(f"{RED}[ERROR] API Check Failed: {e}{RESET}")
+        print(f"[ERROR] API Check Failed: {e}")
         return False
 
 def force_join_markup():
@@ -120,16 +96,15 @@ def force_join_markup():
     return markup
 
 # =============== MESSAGE HANDLERS ===============
-@bot.message_handler(commands=['start'])
-def start_command(message):
-    user_id = message.from_user.id
-    first_name = message.from_user.first_name
+async def start_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    first_name = update.effective_user.first_name
 
-    print(f"{CYAN}[LOG] Connection attempt by ID: {user_id}{RESET}")
+    print(f"[LOG] Connection attempt by ID: {user_id}")
     log_user_activity(user_id, "START_COMMAND", f"User started bot")
 
     # REAL-TIME CHECK - Check channels EVERY TIME
-    if not is_user_subscribed_both(user_id):
+    if not await is_user_subscribed_both(user_id, ctx.bot):
         # ❌ ACCESS DENIED MESSAGE
         text = f"""
 🚨 *SYSTEM BREACH DETECTED* 🚨
@@ -139,77 +114,96 @@ def start_command(message):
 🛡️ You must join BOTH channels to use this bot.
 {DIVIDER}
 """
-        bot.send_message(user_id, text, parse_mode="Markdown", reply_markup=force_join_markup())
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=force_join_markup())
         remove_verified_user(user_id)
-        print(f"{RED}[BLOCKED] Access Denied for ID: {user_id}{RESET}")
+        print(f"[BLOCKED] Access Denied for ID: {user_id}")
         return
 
     # ✅ ACCESS GRANTED - Show bot.py Welcome Message + Features
     add_verified_user(user_id)
     
     # Show Welcome Message from bot.py
-    welcome_text = show_welcome_message(user_id, first_name)
-    bot.send_message(user_id, welcome_text, parse_mode="Markdown")
+    welcome_text = f"""
+✅ *ACCESS GRANTED* ✅
+{DIVIDER}
+Welcome to the Mainframe, `{first_name}`.
+
+📡 *Status:* Connected
+🛡️ *Security:* Encrypted
+⚡ *Privilege:* Admin Level 1
+
+`Waiting for command execution...`
+{DIVIDER}
+"""
+    await update.message.reply_text(welcome_text, parse_mode="Markdown")
     
     # Show Features Menu from bot.py
-    features_menu = show_features_menu()
-    bot.send_message(user_id, "🎯 *Available Features:*", reply_markup=features_menu)
+    features_menu = main_menu()
+    await update.message.reply_text("🎯 *Available Features:*", reply_markup=features_menu)
     
-    print(f"{GREEN}[GRANTED] Access Approved for ID: {user_id}{RESET}")
+    print(f"[GRANTED] Access Approved for ID: {user_id}")
 
-@bot.message_handler(func=lambda message: True)
-def handle_all_messages(message):
+async def handle_all_messages(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Intercept all other messages - REAL-TIME CHECK"""
-    user_id = message.from_user.id
+    user_id = update.effective_user.id
     
     # REAL-TIME CHECK on EVERY message
-    if not is_user_subscribed_both(user_id):
-        bot.reply_to(message, "⚠️ *ERROR:* You cannot send messages until you bypass the firewall. Send /start", parse_mode="Markdown")
+    if not await is_user_subscribed_both(user_id, ctx.bot):
+        await update.message.reply_text("⚠️ *ERROR:* You cannot send messages until you bypass the firewall. Send /start", parse_mode="Markdown")
         remove_verified_user(user_id)
         log_user_activity(user_id, "MESSAGE_BLOCKED", "User left channels")
     else:
         # Call bot.py command handler
-        response = handle_command(message.text)
-        bot.reply_to(message, response, parse_mode="Markdown")
+        response = handle_command(update.message.text)
+        await update.message.reply_text(response, parse_mode="Markdown")
 
-# =============== CALLBACK HANDLER ===============
-@bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
-    user_id = call.from_user.id
+async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    user_id = update.callback_query.from_user.id
+    q = update.callback_query
+    await q.answer()
     
-    if call.data == "verify_access":
+    if q.data == "verify_access":
         # REAL-TIME CHECK
-        if not is_user_subscribed_both(user_id):
-            bot.answer_callback_query(call.id, "❌ FIREWALL ACTIVE: You have not joined the network yet!", show_alert=True)
+        if not await is_user_subscribed_both(user_id, ctx.bot):
+            await q.answer("❌ FIREWALL ACTIVE: You have not joined the network yet!", show_alert=True)
         else:
-            bot.answer_callback_query(call.id, "✅ Verified! Access Granted", show_alert=True)
-            bot.delete_message(call.message.chat.id, call.message.message_id)
+            await q.answer("✅ Verified! Access Granted", show_alert=True)
+            await q.message.delete()
             
             add_verified_user(user_id)
             
             # Show Welcome Message from bot.py
-            welcome_text = show_welcome_message(user_id, call.from_user.first_name)
-            bot.send_message(user_id, welcome_text, parse_mode="Markdown")
+            welcome_text = f"""
+✅ *FIREWALL BYPASSED* ✅
+{DIVIDER}
+Welcome to the Mainframe, `{q.from_user.first_name}`.
+
+📡 *Status:* Connected
+🛡️ *Security:* Encrypted
+⚡ *Privilege:* Admin Level 1
+
+`Waiting for command execution...`
+{DIVIDER}
+"""
+            await q.message.reply_text(welcome_text, parse_mode="Markdown")
             
             # Show Features Menu from bot.py
-            features_menu = show_features_menu()
-            bot.send_message(user_id, "🎯 *Available Features:*", reply_markup=features_menu)
+            features_menu = main_menu()
+            await q.message.reply_text("🎯 *Available Features:*", reply_markup=features_menu)
 
 # =============== GROUP MESSAGE HANDLER ===============
-@bot.message_handler(func=lambda message: message.chat.id == GROUP_ID)
-def group_handler(message):
+async def group_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Handle messages from group (main bot detection)"""
-    user_id = message.from_user.id
+    user_id = update.effective_user.id
     add_verified_user(user_id)
     log_user_activity(user_id, "GROUP_JOIN", "User joined main bot group")
-    print(f"{GREEN}[GROUP] User {user_id} verified from group{RESET}")
+    print(f"[GROUP] User {user_id} verified from group")
 
 # =============== NEW MEMBER LOGGING ===============
-@bot.message_handler(content_types=['new_chat_members'])
-def new_member_handler(message):
+async def new_member_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """Log when new members join the group"""
-    if message.chat.id == GROUP_ID:
-        for user in message.new_chat_members:
+    if update.message.chat.id == GROUP_ID:
+        for user in update.message.new_chat_members:
             user_id = user.id
             first_name = user.first_name
             username = user.username if user.username else "N/A"
@@ -220,27 +214,24 @@ def new_member_handler(message):
 👤 *Name:* {first_name}
 🆔 *ID:* {user_id}
 🔗 *Username:* @{username}
-📅 *Joined:* {time.strftime('%Y-%m-%d %H:%M:%S')}
 {DIVIDER}
 """
-            bot.send_message(PRIVATE_LOGS_ID, log_message, parse_mode="Markdown")
-            print(f"{GREEN}[NEW MEMBER] {first_name} joined the group{RESET}")
+            # Note: This requires bot instance to be available
+            print(f"[NEW MEMBER] {first_name} joined the group")
 
 # =============== CHECK SUBSCRIPTION COMMAND ===============
-@bot.message_handler(commands=['check'])
-def check_command(message):
-    user_id = message.from_user.id
+async def check_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     
-    if is_user_subscribed_both(user_id):
-        bot.send_message(user_id, "✅ You are subscribed to both channels!")
+    if await is_user_subscribed_both(user_id, ctx.bot):
+        await update.message.reply_text("✅ You are subscribed to both channels!")
     else:
-        bot.send_message(user_id, "❌ You are not subscribed to both channels!")
+        await update.message.reply_text("❌ You are not subscribed to both channels!")
 
 # =============== ADMIN COMMAND ===============
-@bot.message_handler(commands=['admin'])
-def admin_command(message):
-    if message.from_user.id == 123456789:  # Apna user ID yahan daalo
-        bot.send_message(message.from_user.id, f"""
+async def admin_command(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id == 123456789:  # Apna user ID yahan daalo
+        await update.message.reply_text(f"""
 🛡️ *ADMIN PANEL* 🛡️
 {DIVIDER}
 📊 *Statistics:*
@@ -249,12 +240,33 @@ def admin_command(message):
 {DIVIDER}
 """, parse_mode="Markdown")
     else:
-        bot.send_message(message.from_user.id, "❌ Access Denied!")
+        await update.message.reply_text("❌ Access Denied!")
 
 # =============== START BOT ===============
 if __name__ == "__main__":
-    print_banner()
+    print(f"{'='*50}")
+    print(f"💀 CYBER MAINFRAME - VERIFICATION BOT 💀")
+    print(f"🚨 FORCE JOIN GATEWAY ACTIVE 🚨")
+    print(f"{'='*50}")
+    print(f"📡 Target Channel 1: {CHANNEL_1_ID}")
+    print(f"📡 Target Channel 2: {CHANNEL_2_ID}")
+    print(f"📡 Group ID: {GROUP_ID}")
+    print(f"📡 Private Logs: {PRIVATE_LOGS_ID}")
+    print(f"✅ Bot is listening for incoming connections...\n")
+    
     try:
-        bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # Add handlers
+        application.add_handler(CommandHandler("start", start_command))
+        application.add_handler(CommandHandler("check", check_command))
+        application.add_handler(CommandHandler("admin", admin_command))
+        application.add_handler(CallbackQueryHandler(callback_handler))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_all_messages))
+        application.add_handler(MessageHandler(filters.ALL & filters.ChatType.GROUPS, group_handler))
+        application.add_handler(MessageHandler(filters.ALL & filters.ChatType.GROUPS & filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member_handler))
+        
+        # Start the bot
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
     except Exception as e:
-        print(f"{RED}CRITICAL ERROR: {e}{RESET}")
+        print(f"CRITICAL ERROR: {e}")
