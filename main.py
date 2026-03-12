@@ -50,7 +50,7 @@ def start(message):
 
         bot.send_message(
             user_id,
-            "⚠️ Bot use karne ke liye dono channels join karo",
+            "⚠️ Join both channels to use the bot.",
             reply_markup=join_buttons()
         )
 
